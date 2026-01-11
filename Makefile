@@ -2,7 +2,7 @@
 
 run:
 	@nasm -f elf64 init.asm -o init.o
-	@ld -o init init.o
-	@./init
+	@ld -o init.elf init.o
+	@./init.elf
 clean: 
 	@rm -f init.o init

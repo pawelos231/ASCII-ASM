@@ -1,8 +1,17 @@
-.PHONY: run clean
+.PHONY: run run-debug clean
+
+ASM = nasm
+LD  = ld
 
 run:
-	@nasm -f elf64 init.asm -o init.o
-	@ld -o init.elf init.o
+	@$(ASM) -f elf64 init.asm -o init.o
+	@$(LD) -o init.elf init.o
 	@./init.elf
-clean: 
-	@rm -f init.o init
+
+run-debug:
+	@$(ASM) -f elf64 -g -F dwarf init.asm -o init.o
+	@$(LD) -g -o init.elf init.o
+	@gdb ./init.elf
+
+clean:
+	@rm -f init.o init.elf

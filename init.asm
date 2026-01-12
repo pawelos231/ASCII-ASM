@@ -12,9 +12,24 @@ _start:
     mov r12, rax ; remember the file descriptor
 
     xor r9, r9
-    jmp loop
 
-after_loop:
+    ; read the first 4 bytes (width)
+    mov rax, 0
+    mov rdi, r12
+    mov rsi, width_buf
+    mov rdx, 4 ; 4 bytes
+    syscall
+
+    ; read the next 4 bytes (height)
+    mov rax, 0
+    mov rdi, r12
+    mov rsi, height_buf
+    mov rdx, 4 ; 4 bytes
+    syscall
+
+    ; jmp read_file_loop
+
+after_read_file_loop:
     ;close
     mov rax, 3
     mov rdi, r12
@@ -26,33 +41,38 @@ after_loop:
     syscall
 
 
-loop:
+read_file_loop:
     ; read step
     mov rdi, r12 ; set rdi to fd
     mov rax, 0 ; set rax to open file descriptor sys call 
-    mov rsi, buf ; set rsi register to buf (which is 16 bytes)
-    movzx edx, byte[value] ; count - how many bytes to read, zero-extend - will set higher up bits to 0
+    mov rsi, read_buf ; set rsi register to buf (which is 4096 bytes)
+    mov rdx, [value] ; count - how many bytes to read, zero-extend 
     syscall
     mov r9, rax ;holds amount of data read
     cmp r9, 0
-    jle after_loop ; if number of bytes read is 0, then quit
+    jle after_read_file_loop ; if number of bytes read is 0, then quit
 
     ; write step
     mov rdx, rax
-    mov rsi, buf
+    mov rsi, read_buf
     mov rax, 1
     mov rdi, 1
     syscall
 
-    jmp loop
+    jmp read_file_loop
 
 
 section .data
 msg db 'Hello, World!', 10
-name db 'siema.txt', 0
-value db 128, 0
+name db 'out.bruh', 0
+value dq 4096, 0
+chunk_width db 8
+chunk_height db 8
+
 msg_len equ $ - msg
 
 
 section .bss
-buf resb 16
+read_buf resb 4096
+width_buf resb 4
+height_buf resb 4

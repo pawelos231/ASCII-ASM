@@ -4,6 +4,7 @@ ASM = nasm
 LD  = ld
 
 run:
+	@go run decode.go
 	@$(ASM) -f elf64 init.asm -o init.o
 	@$(LD) -o init.elf init.o
 	@./init.elf
@@ -14,4 +15,4 @@ run-debug:
 	@gdb ./init.elf
 
 clean:
-	@rm -f init.o init.elf
+	@rm -f init.o init.elf out.bruh

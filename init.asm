@@ -40,6 +40,29 @@ after_read_file_loop:
     xor rdi, rdi ; status = 0
     syscall
 
+; for know entire image goes into ram, streaming might be an idea for later tho...
+
+place_image_in_memory:
+    movzx r15, [width_buf] ;holds pointer to width_buf (which points to width of the image in pixels), 
+    movzx r10, [height_buf] ;hold pointer to height_buf (which points to the height of the image in pixels)
+    imul r15, r10 ; hold it in calee save register for later use in clear function
+    rsi, r9 ; length of mapping
+    rax, 9 ;mmap
+    rdi, 0 ; kernel chooses space
+    mov rdx, 1; PROT_READ
+    mov r10, 2 ; MAP_PRIVATE
+    mov r8, r12 ; fd
+    mov r9, 0 ; offset
+    syscall
+    mov r13, rax ;base adress rememebr (after 8 bytes of header info)
+    ret
+
+clear_memory_from_image_data:
+    rax, 11 ; munmap
+    mov rdi, r13 ; base adress of image
+    mov rsi, r15
+    syscall
+    ret
 
 read_file_loop:
     ; read step

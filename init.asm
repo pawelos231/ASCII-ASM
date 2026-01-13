@@ -1,4 +1,3 @@
-; hello world program in x86 assembly
 global _start
 section .text
 
@@ -27,6 +26,11 @@ _start:
     mov rdx, 4 ; 4 bytes
     syscall
 
+    call place_image_in_memory
+    ; at this point, the image is in memory at address r13
+    ; with size r15 (width * height)
+    
+
     ; jmp read_file_loop
 
 after_read_file_loop:
@@ -40,15 +44,15 @@ after_read_file_loop:
     xor rdi, rdi ; status = 0
     syscall
 
-; for know entire image goes into ram, streaming might be an idea for later tho...
 
+; for know entire image goes into ram, streaming might be an idea for later tho...
 place_image_in_memory:
-    movzx r15, [width_buf] ;holds pointer to width_buf (which points to width of the image in pixels), 
-    movzx r10, [height_buf] ;hold pointer to height_buf (which points to the height of the image in pixels)
+    mov r15d, dword[width_buf] ;holds pointer to width_buf (which points to width of the image in pixels), 
+    mov r10d, dword[height_buf] ;hold pointer to height_buf (which points to the height of the image in pixels)
     imul r15, r10 ; hold it in calee save register for later use in clear function
-    rsi, r9 ; length of mapping
-    rax, 9 ;mmap
-    rdi, 0 ; kernel chooses space
+    mov rsi, r15 ; width * height
+    mov rax, 9 ;mmap
+    mov rdi, 0 ; kernel chooses space
     mov rdx, 1; PROT_READ
     mov r10, 2 ; MAP_PRIVATE
     mov r8, r12 ; fd
@@ -58,7 +62,7 @@ place_image_in_memory:
     ret
 
 clear_memory_from_image_data:
-    rax, 11 ; munmap
+    mov rax, 11 ; munmap
     mov rdi, r13 ; base adress of image
     mov rsi, r15
     syscall

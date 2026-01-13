@@ -29,11 +29,44 @@ _start:
     call place_image_in_memory
     ; at this point, the image is in memory at address r13
     ; with size r15 (width * height)
-    
-
+    mov rcx, 0
+    mov rdx, 0
+    xor rax, rax ; zero out rax as al is the bottom 8 bits of this register
+    xor r10, r10 ; set r10 register to 0
+    xor r9, r9 ; set r9 to zero (this register will hold the sum of the pixel values)
+    jmp loop_over_memory_in_chunks
     ; jmp read_file_loop
 
+
+loop_over_memory_in_chunks:
+    xor rcx, rcx
+
+inner:
+    mov al, [r13 + rcx] ; load byte from image data
+    movzx rax, al
+    add r9, rax ; we add the pixel value to r9 on every iteration
+    inc rcx
+    cmp rcx, 8
+    jne inner ; do the loop again if rcx is not equal to 8
+    add r13, r15 ; r13 (base address) now holds (base address) + (buf_width * rdx)
+    inc rdx
+    cmp rdx, 8
+    jne loop_over_memory_in_chunks
+
+
 after_read_file_loop:
+    shr r9, 6 ; divide the sum of pixels in a chunk(64byte chunk) by 64
+    xor r11, r11 ; make place for index calculation
+    mov r11, r9
+    imul r11, 9 ;multiply the average value times 9
+    imul r11, r11, 257 ; this 257 can really seem out of nowhere, but 1 / 255 ≈ K / 2^16 (we are trying to find K, which should be a veryyy close approximation), so K ≈ 2^16/255 ≈ 257 
+    shr r11, 16 ; approxiamate the index (divide by 65536)
+    cmp r11, 9
+    jbe ok  ; jump if below or equal (to make sure we are in bounds [0-9 index])
+    mov r11, 9 ; if went outside the scope, set it to 9
+
+ok:
+    mov al, [string_collection + r11]
     ;close
     mov rax, 3
     mov rdi, r12
@@ -49,8 +82,9 @@ after_read_file_loop:
 place_image_in_memory:
     mov r15d, dword[width_buf] ;holds pointer to width_buf (which points to width of the image in pixels), 
     mov r10d, dword[height_buf] ;hold pointer to height_buf (which points to the height of the image in pixels)
-    imul r15, r10 ; hold it in calee save register for later use in clear function
-    mov rsi, r15 ; width * height
+    mov r11, r15 ; hold a copy of width to not overwrite it
+    imul r11, r10 ; hold it in calee save register for later use in clear function
+    mov rsi, r11 ; width * height (bytes)
     mov rax, 9 ;mmap
     mov rdi, 0 ; kernel chooses space
     mov rdx, 1; PROT_READ
@@ -91,6 +125,7 @@ read_file_loop:
 
 section .data
 msg db 'Hello, World!', 10
+string_collection db " .:-=+*#%@", 0
 name db 'out.bruh', 0
 value dq 4096, 0
 chunk_width db 8

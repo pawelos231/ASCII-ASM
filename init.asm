@@ -65,14 +65,8 @@ after_read_file_loop:
     imul r11, r11, 257 ; this 257 can really seem out of nowhere, but 1 / 255 ≈ K / 2^16 (we are trying to find K, which should be a veryyy close approximation), so K ≈ 2^16/255 ≈ 257 
     shr r11, 16 ; approxiamate the index (divide by 65536)
     cmp r11, 9
-    jbe ok  ; jump if below or equal (to make sure we are in bounds [0-9 index])
+    call ok  ; jump if below or equal (to make sure we are in bounds [0-9 index])
     mov r11, 9 ; if went outside the scope, set it to 9
-
-ok:
-    xor r9, r9
-    mov r9b, [string_collection + r11]
-    ; place the converted chunk (so just char) into memory
-    
 
     ;close
     mov rax, 3
@@ -83,6 +77,13 @@ ok:
     mov rax, 60 
     xor rdi, rdi ; status = 0
     syscall
+
+ok:
+    xor r9, r9
+    mov r9b, [string_collection + r11]
+    ; place the converted chunk (so just char) into memory
+    ret 
+    
 
 register_memory_for_converted_chunks:
     xor r15, r15
@@ -96,14 +97,12 @@ register_memory_for_converted_chunks:
     mov rsi, r15 ; width * height (bytes)
     mov rdi, 0 ; kernel chooses space
     mov rdx, 1; PROT_READ
-    mov r10, 0x22           ; MAP_PRIVATE | MAP_ANONYMOUS
-    mov r8, -1              ; fd = -1 (WYMAGANE)
-    xor r9, r9              ; offset = 0
+    mov r10, 0x22 ; MAP_PRIVATE | MAP_ANONYMOUS
+    mov r8, -1 ; fd = -1
+    xor r9, r9 ; offset = 0
     syscall
     mov r14, rax
     ret
-
-
 
 
 ; for know entire image goes into ram, streaming might be an idea for later tho...

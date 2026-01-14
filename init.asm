@@ -1,6 +1,8 @@
 global _start
 section .text
-
+; r12 in this application is a long lived register (callee save nature) - it holds fd (file-descriptor)
+; r13 in this application is also a long lived register (callee save nature) it holds the start address of base-adress of image
+; r14 in this application is also a long lived register (calee save nature) it holds the start of address space for converted chunks
 
 _start:
     ; open
@@ -27,6 +29,7 @@ _start:
     syscall
 
     call place_image_in_memory
+    call register_memory_for_converted_chunks
     ; at this point, the image is in memory at address r13
     ; with size r15 (width * height)
     mov rcx, 0
@@ -66,7 +69,11 @@ after_read_file_loop:
     mov r11, 9 ; if went outside the scope, set it to 9
 
 ok:
-    mov al, [string_collection + r11]
+    xor r9, r9
+    mov r9b, [string_collection + r11]
+    ; place the converted chunk (so just char) into memory
+    
+
     ;close
     mov rax, 3
     mov rdi, r12
@@ -77,6 +84,27 @@ ok:
     xor rdi, rdi ; status = 0
     syscall
 
+register_memory_for_converted_chunks:
+    xor r15, r15
+    xor r10, r10
+    mov r15d, dword[width_buf] ;holds pointer to width_buf (which points to width of the image in pixels), 
+    mov r10d, dword[height_buf] ;hold pointer to height_buf (which points to the height of the image in pixels)
+    imul r15d, r10d
+    shr r15d, 6 ;divide it by 64, beacuse we have number_of_pixels / 64 chunks
+    ; syscall related stuff
+    mov rax, 9 ; mmap
+    mov rsi, r15 ; width * height (bytes)
+    mov rdi, 0 ; kernel chooses space
+    mov rdx, 1; PROT_READ
+    mov r10, 0x22           ; MAP_PRIVATE | MAP_ANONYMOUS
+    mov r8, -1              ; fd = -1 (WYMAGANE)
+    xor r9, r9              ; offset = 0
+    syscall
+    mov r14, rax
+    ret
+
+
+
 
 ; for know entire image goes into ram, streaming might be an idea for later tho...
 place_image_in_memory:
@@ -85,14 +113,14 @@ place_image_in_memory:
     mov r11, r15 ; hold a copy of width to not overwrite it
     imul r11, r10 ; hold it in calee save register for later use in clear function
     mov rsi, r11 ; width * height (bytes)
-    mov rax, 9 ;mmap
+    mov rax, 9 ; mmap
     mov rdi, 0 ; kernel chooses space
     mov rdx, 1; PROT_READ
     mov r10, 2 ; MAP_PRIVATE
     mov r8, r12 ; fd
-    mov r9, 0 ; offset
+    xor r9, r9 ; offset = 0
     syscall
-    mov r13, rax ;base adress rememebr (after 8 bytes of header info)
+    mov r13, rax ; base adress rememebr (after 8 bytes of header info)
     ret
 
 clear_memory_from_image_data:

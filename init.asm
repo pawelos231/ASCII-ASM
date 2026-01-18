@@ -2,7 +2,7 @@ global _start
 section .text
 ; r12 in this application is a long lived register (callee save nature) - it holds fd (file-descriptor)
 ; r13 in this application is also a long lived register (callee save nature) it holds the start address of base-adress of image
-; r14 in this application is also a long lived register (calee save nature) it holds the start of address space for converted chunks
+; r14 in this application is also a long lived register (callee save nature) it holds the start of address space for converted chunks
 
 _start:
     ; open

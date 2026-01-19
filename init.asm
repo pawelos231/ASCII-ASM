@@ -41,69 +41,6 @@ _start:
     ; jmp read_file_loop
 
 
-loop_over_memory_in_chunks:
-    xor rcx, rcx
-
-inner:
-    mov al, [r13 + rcx] ; load byte from image data
-    movzx rax, al
-    add r9, rax ; we add the pixel value to r9 on every iteration
-    inc rcx
-    cmp rcx, 8
-    jne inner ; do the loop again if rcx is not equal to 8
-    add r13, r15 ; r13 (base address) now holds (base address) + (buf_width * rdx)
-    inc rdx
-    cmp rdx, 8
-    jne loop_over_memory_in_chunks
-
-
-after_read_file_loop:
-    shr r9, 6 ; divide the sum of pixels in a chunk(64byte chunk) by 64
-    xor r11, r11 ; make place for index calculation
-    mov r11, r9
-    imul r11, 9 ;multiply the average value times 9
-    imul r11, r11, 257 ; this 257 can really seem out of nowhere, but 1 / 255 ≈ K / 2^16 (we are trying to find K, which should be a veryyy close approximation), so K ≈ 2^16/255 ≈ 257 
-    shr r11, 16 ; approxiamate the index (divide by 65536)
-    cmp r11, 9
-    call ok  ; jump if below or equal (to make sure we are in bounds [0-9 index])
-    mov r11, 9 ; if went outside the scope, set it to 9
-
-    ;close
-    mov rax, 3
-    mov rdi, r12
-    syscall
-    
-    ;exit
-    mov rax, 60 
-    xor rdi, rdi ; status = 0
-    syscall
-
-ok:
-    xor r9, r9
-    mov r9b, [string_collection + r11]
-    ; place the converted chunk (so just char) into memory
-    ret 
-    
-
-register_memory_for_converted_chunks:
-    xor r15, r15
-    xor r10, r10
-    mov r15d, dword[width_buf] ;holds pointer to width_buf (which points to width of the image in pixels), 
-    mov r10d, dword[height_buf] ;hold pointer to height_buf (which points to the height of the image in pixels)
-    imul r15d, r10d
-    shr r15d, 6 ;divide it by 64, beacuse we have number_of_pixels / 64 chunks
-    ; syscall related stuff
-    mov rax, 9 ; mmap
-    mov rsi, r15 ; width * height (bytes)
-    mov rdi, 0 ; kernel chooses space
-    mov rdx, 1; PROT_READ
-    mov r10, 0x22 ; MAP_PRIVATE | MAP_ANONYMOUS
-    mov r8, -1 ; fd = -1
-    xor r9, r9 ; offset = 0
-    syscall
-    mov r14, rax
-    ret
-
 
 ; for know entire image goes into ram, streaming might be an idea for later tho...
 place_image_in_memory:
@@ -122,32 +59,89 @@ place_image_in_memory:
     mov r13, rax ; base adress rememebr (after 8 bytes of header info)
     ret
 
+
+
+register_memory_for_converted_chunks:
+    xor r15, r15
+    xor r10, r10
+    mov r15d, dword[width_buf] ;holds pointer to width_buf (which points to width of the image in pixels), 
+    mov r10d, dword[height_buf] ;hold pointer to height_buf (which points to the height of the image in pixels)
+    imul r15d, r10d
+    shr r15d, 6 ;divide it by 64, beacuse we have number_of_pixels / 64 chunks
+    ; syscall related stuff
+    mov rax, 9 ; mmap
+    mov rsi, r15 ; width * height (bytes)
+    mov rdi, 0 ; kernel chooses space
+    mov rdx, 3; PROT_READ | PROT_WRITE
+    mov r10, 0x22 ; MAP_PRIVATE | MAP_ANONYMOUS
+    mov r8, -1 ; fd = -1
+    xor r9, r9 ; offset = 0
+    syscall
+    mov r14, rax
+    ret
+
+
+
+loop_over_memory_in_chunks:
+    xor rcx, rcx
+
+inner:
+    mov al, [r13 + rcx] ; load byte from image data
+    movzx rax, al
+    add r9, rax ; we add the pixel value to r9 on every iteration
+    inc rcx
+    cmp rcx, 8
+    jne inner ; do the loop again if rcx is not equal to 8
+    add r13, r15 ; r13 (base address) now holds (base address) + (buf_width * rdx)
+    inc rdx
+    cmp rdx, 8
+    jne loop_over_memory_in_chunks
+
+
+after_memory_read:
+    shr r9, 6 ; divide the sum of pixels in a chunk(64byte chunk) by 64
+    xor r11, r11 ; make place for index calculation
+    mov r11, r9
+    imul r11, 9 ;multiply the average value times 9
+    imul r11, r11, 257 ; this 257 can really seem out of nowhere, but 1 / 255 ≈ K / 2^16 (we are trying to find K, which should be a veryyy close approximation), so K ≈ 2^16/255 ≈ 257 
+    shr r11, 16 ; approxiamate the index (divide by 65536)
+    cmp r11, 9
+    jbe ok  ; jump if below or equal (to make sure we are in bounds [0-9 index])
+    mov r11, 9 ; if went outside the scope, set it to 9
+
+
+ok:
+    xor r9, r9
+    mov r9b, [string_collection + r11]
+    ; place it into memory (r14)
+    mov byte [r14], r9b
+
+    ; write the value to the console
+    mov rax, 1            ; sys_write
+    mov rdi, 1            ; stdout
+    mov rsi, r14          ; adres bufora
+    mov rdx, 1            ; 1 bajt
+    syscall
+
+    inc r14 ; increment the address for next chunk
+
+    ;close
+    mov rax, 3
+    mov rdi, r12
+    syscall
+    
+    ;exit
+    mov rax, 60 
+    xor rdi, rdi ; status = 0
+    syscall 
+    
+
 clear_memory_from_image_data:
     mov rax, 11 ; munmap
     mov rdi, r13 ; base adress of image
     mov rsi, r15
     syscall
-    ret
 
-read_file_loop:
-    ; read step
-    mov rdi, r12 ; set rdi to fd
-    mov rax, 0 ; set rax to open file descriptor sys call 
-    mov rsi, read_buf ; set rsi register to buf (which is 4096 bytes)
-    mov rdx, [value] ; count - how many bytes to read, zero-extend 
-    syscall
-    mov r9, rax ;holds amount of data read
-    cmp r9, 0
-    jle after_read_file_loop ; if number of bytes read is 0, then quit
-
-    ; write step
-    mov rdx, rax
-    mov rsi, read_buf
-    mov rax, 1
-    mov rdi, 1
-    syscall
-
-    jmp read_file_loop
 
 
 section .data

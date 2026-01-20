@@ -180,7 +180,12 @@ write_to_console:
 clear_memory_from_image_data:
     mov rax, 11 ; munmap
     mov rdi, r13 ; base adress of image
-    mov rsi, r15
+    mov rsi, [image_size] ; size of image
+    syscall
+
+    mov rax, 11 ; munmap
+    mov rdi, r14 ; base adress of converted chunks
+    mov rsi, [converted_buf_size] ; size of converted chunks
     syscall
 
     ;exit

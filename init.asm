@@ -69,22 +69,21 @@ close_file:
 
 
 register_memory_for_converted_chunks:
-    ; cols = (width + chunk_width - 1) / chunk_width  (ceil)
-    movzx   ecx, byte [chunk_width]
-    mov     eax, dword [width_buf]
-    add     eax, ecx
-    dec     eax ; width + chunk_width - 1
-    xor     edx, edx
-    div     ecx                     ; eax = cols
-    mov     r8d, eax
-    ; rows = (height + chunk_height - 1) / chunk_height (ceil)
-    movzx   ecx, byte [chunk_height]
-    mov     eax, dword [height_buf]
-    add     eax, ecx
-    dec     eax ; height + chunk_height - 1
-    xor     edx, edx
-    div     ecx                     
-    mov     ecx, eax
+    ; cols = (width + chunk_width - 1) / chunk_width  (ceil), chunk_width = 2^n
+    movzx   r9d, byte [chunk_width] ; r9d = chunk_width
+    mov     eax, dword [width_buf] ; eax = width
+    lea     eax, [eax + r9d - 1] ; eax = width + chunk_width - 1
+    bsf     ecx, r9d ; ecx = log2(chunk_width)
+    shr     eax, cl ; eax = cols
+    mov     r8d, eax ; r8d = cols
+
+    ; rows = (height + chunk_height - 1) / chunk_height (ceil), chunk_height = 2^n
+    movzx   r9d, byte [chunk_height] ; r9d = chunk_height
+    mov     eax, dword [height_buf] ; eax = height
+    lea     eax, [eax + r9d - 1] ; eax = height + chunk_height - 1
+    bsf     ecx, r9d ; ecx = log2(chunk_height)
+    shr     eax, cl ; eax = rows
+    mov     ecx, eax ; ecx = rows (tak jak miałeś)
 
     mov     eax, r8d               ; cols
     imul    eax, ecx               ; eax = cols*rows

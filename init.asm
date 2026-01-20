@@ -32,12 +32,12 @@ _start:
     call register_memory_for_converted_chunks
     ; at this point, the image is in memory at address r13
     ; with size r15 (width * height)
-    mov rcx, 0
-    mov rdx, 0
+    xor rcx, rcx
+    xor rdx, rdx
     xor rax, rax ; zero out rax as al is the bottom 8 bits of this register
-    xor r10, r10 ; set r10 register to 0
+    xor r10, r10 
     xor r9, r9 ; set r9 to zero (this register will hold the sum of the pixel values)
-    jmp loop_over_memory_in_chunks
+    jmp process_chunk
     ; jmp read_file_loop
 
 
@@ -78,27 +78,36 @@ register_memory_for_converted_chunks:
     xor r9, r9 ; offset = 0
     syscall
     mov r14, rax
+    xor rdx, rdx ; clear the register of any thrash data it will hold the outer counter for chunk processing
+    xor r10, r10 ; clear the register of any thrash data (it will hold the X offset)
+    xor rbx, rbx ; clear the register of any thrash data it will hold the Y offset
     ret
 
 
-
-loop_over_memory_in_chunks:
+process_chunk:
     xor rcx, rcx
-
+    mov r8d, dword[width_buf]
+    mov r15, rdx
+    imul r15, r8
+    lea rsi, [r13 + r15]
+    add rsi, r10
+    add rsi, rbx
+    
 inner:
-    mov al, [r13 + rcx] ; load byte from image data
+    mov al, [rsi + rcx] ; load byte from image data
     movzx rax, al
     add r9, rax ; we add the pixel value to r9 on every iteration
     inc rcx
     cmp rcx, 8
     jne inner ; do the loop again if rcx is not equal to 8
-    add r13, r15 ; r13 (base address) now holds (base address) + (buf_width * rdx)
     inc rdx
+    xor r15, r15
     cmp rdx, 8
-    jne loop_over_memory_in_chunks
+    jne process_chunk
 
 
 after_memory_read:
+    ;remember the counter
     shr r9, 6 ; divide the sum of pixels in a chunk(64byte chunk) by 64
     xor r11, r11 ; make place for index calculation
     mov r11, r9
@@ -106,17 +115,17 @@ after_memory_read:
     imul r11, r11, 257 ; this 257 can really seem out of nowhere, but 1 / 255 ≈ K / 2^16 (we are trying to find K, which should be a veryyy close approximation), so K ≈ 2^16/255 ≈ 257 
     shr r11, 16 ; approxiamate the index (divide by 65536)
     cmp r11, 9
-    jbe ok  ; jump if below or equal (to make sure we are in bounds [0-9 index])
+    jbe place_converted_chunk_in_memory  ; jump if below or equal (to make sure we are in bounds [0-9 index])
     mov r11, 9 ; if went outside the scope, set it to 9
 
 
-ok:
+place_converted_chunk_in_memory:
     xor r9, r9
     mov r9b, [string_collection + r11]
     ; place it into memory (r14)
     mov byte [r14], r9b
 
-    ; write the value to the console
+    ; write the value to the console (this will not be here normally)
     mov rax, 1            ; sys_write
     mov rdi, 1            ; stdout
     mov rsi, r14          ; adres bufora
@@ -124,6 +133,43 @@ ok:
     syscall
 
     inc r14 ; increment the address for next chunk
+
+    
+go_to_next_chunk:
+    xor r9, r9 ; clear the the register from converted chunk 
+    xor rax, rax ; clear rax as it holds byte from image data
+    xor rdx, rdx ; clear the outer counter
+    add r10d, 8 ; we add to move it to the right, so next chunk to the right, this will have to zeroed out if we go to the edge of the image
+    cmp r10d, dword[width_buf]
+    jl process_chunk
+
+    mov rax, 1          ; sys_write
+    mov rdi, 1          ; stdout
+    mov rsi, newline
+    mov rdx, 1
+    syscall
+
+    xor r10, r10 ; reset x offset
+    mov r10d, dword [width_buf]
+    imul r10, 8
+    add rbx, r10         
+
+    mov r8d, dword [width_buf]
+    mov ecx, dword [height_buf]
+    imul r8, rcx         
+
+    cmp rbx, r8
+    jge clear_memory_from_image_data
+
+    xor r10, r10          ; reset x offset
+    jmp process_chunk
+    
+
+clear_memory_from_image_data:
+    mov rax, 11 ; munmap
+    mov rdi, r13 ; base adress of image
+    mov rsi, r15
+    syscall
 
     ;close
     mov rax, 3
@@ -134,25 +180,16 @@ ok:
     mov rax, 60 
     xor rdi, rdi ; status = 0
     syscall 
-    
-
-clear_memory_from_image_data:
-    mov rax, 11 ; munmap
-    mov rdi, r13 ; base adress of image
-    mov rsi, r15
-    syscall
 
 
 
 section .data
-msg db 'Hello, World!', 10
+newline db 10
 string_collection db " .:-=+*#%@", 0
 name db 'out.bruh', 0
 value dq 4096, 0
-chunk_width db 8
-chunk_height db 8
+chunk_width db 8 ; same as height
 
-msg_len equ $ - msg
 
 
 section .bss

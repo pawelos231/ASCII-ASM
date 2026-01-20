@@ -134,12 +134,12 @@ inner:
 
 after_memory_read:
     ; compute average = sum / (chunk_width * chunk_height)
-    movzx rcx, byte [chunk_width]
-    movzx r11d, byte [chunk_height]
-    imul rcx, r11
-    mov rax, r9
-    xor rdx, rdx
-    div rcx
+    movzx r8d,  byte [chunk_width] ; r8d = chunk_width
+    movzx r11d, byte [chunk_height] ; r11d = chunk_height
+    bsf ecx, r8d ; ecx = log2(chunk_width)
+    bsf edx, r11d ; edx = log2(chunk_height)
+    add ecx, edx ; ecx = log2(chunk_width*chunk_height)
+    shr r9, cl; r9 = avg (instead of div)
     mov r9, rax
     xor r11, r11 ; make place for index calculation
     mov r11, r9

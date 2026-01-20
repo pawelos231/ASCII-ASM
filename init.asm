@@ -69,15 +69,24 @@ close_file:
 
 
 register_memory_for_converted_chunks:
-    ; cols = (width + 7) / 8  (ceil)
+    ; cols = (width + chunk_width - 1) / chunk_width  (ceil)
+    movzx   ecx, byte [chunk_width]
     mov     eax, dword [width_buf]
-    add     eax, 7
-    shr     eax, 3                 ; eax = cols
-    ; rows = (height + 7) / 8 (ceil)
-    mov     ecx, dword [height_buf]
-    add     ecx, 7
-    shr     ecx, 3                 ; ecx = rows
+    add     eax, ecx
+    dec     eax ; width + chunk_width - 1
+    xor     edx, edx
+    div     ecx                     ; eax = cols
+    mov     r8d, eax
+    ; rows = (height + chunk_height - 1) / chunk_height (ceil)
+    movzx   ecx, byte [chunk_height]
+    mov     eax, dword [height_buf]
+    add     eax, ecx
+    dec     eax ; height + chunk_height - 1
+    xor     edx, edx
+    div     ecx                     
+    mov     ecx, eax
 
+    mov     eax, r8d               ; cols
     imul    eax, ecx               ; eax = cols*rows
     mov     edx, ecx
     dec     edx
@@ -116,17 +125,23 @@ inner:
     movzx rax, al
     add r9, rax ; we add the pixel value to r9 on every iteration
     inc rcx
-    cmp rcx, 8
-    jne inner ; do the loop again if rcx is not equal to 8
+    cmp cl, [chunk_width]
+    jne inner ; do the loop again if rcx is not equal to chunk_width
     inc rdx
     xor r15, r15
-    cmp rdx, 8
+    cmp dl, [chunk_height]
     jne process_chunk
 
 
 after_memory_read:
-    ;remember the counter
-    shr r9, 6 ; divide the sum of pixels in a chunk(64byte chunk) by 64
+    ; compute average = sum / (chunk_width * chunk_height)
+    movzx rcx, byte [chunk_width]
+    movzx r11d, byte [chunk_height]
+    imul rcx, r11
+    mov rax, r9
+    xor rdx, rdx
+    div rcx
+    mov r9, rax
     xor r11, r11 ; make place for index calculation
     mov r11, r9
     imul r11, 9 ;multiply the average value times 9
@@ -149,13 +164,15 @@ go_to_next_chunk:
     xor r9, r9 ; clear the the register from converted chunk 
     xor rax, rax ; clear rax as it holds byte from image data
     xor rdx, rdx ; clear the outer counter
-    add r10d, 8 ; we add to move it to the right, so next chunk to the right, this will have to zeroed out if we go to the edge of the image
+    movzx r11d, byte [chunk_width]
+    add r10d, r11d ; we add to move it to the right, so next chunk to the right, this will have to zeroed out if we go to the edge of the image
     cmp r10d, dword[width_buf]
     jl process_chunk
 
     xor r10, r10 ; reset x offset
     mov r10d, dword [width_buf]
-    imul r10, 8
+    movzx r11d, byte [chunk_height]
+    imul r10, r11
     add rbx, r10           
 
     cmp rbx, [image_size]
@@ -168,13 +185,13 @@ go_to_next_chunk:
 
 
 write_to_console:
-    ; mov     rax, 1        ; sys_write
-    ; mov     rdi, 1        ; stdout
-    ; mov     rsi, r14      ; buffer base
-    ; mov     byte[r12], 10 ; add newline after each row of chunks
-    ; mov     rdx, [converted_buf_size]
-    ; add     rdx, 1
-    ; syscall
+    mov     rax, 1        ; sys_write
+    mov     rdi, 1        ; stdout
+    mov     rsi, r14      ; buffer base
+    mov     byte[r12], 10 ; add newline after each row of chunks
+    mov     rdx, [converted_buf_size]
+    add     rdx, 1
+    syscall
 
 
 clear_memory_from_image_data:
@@ -200,7 +217,8 @@ newline db 10
 string_collection db " .:-=+*#%@", 0
 name db 'out.bruh', 0
 value dq 4096, 0
-chunk_width db 8 ; same as height
+chunk_width db 8 
+chunk_height db 8 
 
 
 

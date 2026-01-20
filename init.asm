@@ -29,6 +29,7 @@ _start:
     syscall
 
     call place_image_in_memory
+    call close_file
     call register_memory_for_converted_chunks
     ; at this point, the image is in memory at address r13
     ; with size r15 (width * height)
@@ -48,6 +49,7 @@ place_image_in_memory:
     mov r10d, dword[height_buf] ;hold pointer to height_buf (which points to the height of the image in pixels)
     mov r11, r15 ; hold a copy of width to not overwrite it
     imul r11, r10 ; hold it in calee save register for later use in clear function
+    mov [image_size], r11 ; remember image size for later use in clear function
     mov rsi, r11 ; width * height (bytes)
     mov rax, 9 ; mmap
     mov rdi, 0 ; kernel chooses space
@@ -59,28 +61,44 @@ place_image_in_memory:
     mov r13, rax ; base adress rememebr (after 8 bytes of header info)
     ret
 
+close_file:
+    mov rax, 3
+    mov rdi, r12
+    syscall
+    ret
 
 
 register_memory_for_converted_chunks:
-    xor r15, r15
-    xor r10, r10
-    mov r15d, dword[width_buf] ;holds pointer to width_buf (which points to width of the image in pixels), 
-    mov r10d, dword[height_buf] ;hold pointer to height_buf (which points to the height of the image in pixels)
-    imul r15d, r10d
-    shr r15d, 6 ;divide it by 64, beacuse we have number_of_pixels / 64 chunks
-    ; syscall related stuff
-    mov rax, 9 ; mmap
-    mov rsi, r15 ; width * height (bytes)
-    mov rdi, 0 ; kernel chooses space
-    mov rdx, 3; PROT_READ | PROT_WRITE
-    mov r10, 0x22 ; MAP_PRIVATE | MAP_ANONYMOUS
-    mov r8, -1 ; fd = -1
-    xor r9, r9 ; offset = 0
+    ; cols = (width + 7) / 8  (ceil)
+    mov     eax, dword [width_buf]
+    add     eax, 7
+    shr     eax, 3                 ; eax = cols
+    ; rows = (height + 7) / 8 (ceil)
+    mov     ecx, dword [height_buf]
+    add     ecx, 7
+    shr     ecx, 3                 ; ecx = rows
+
+    imul    eax, ecx               ; eax = cols*rows
+    mov     edx, ecx
+    dec     edx
+    add     eax, edx               ; total_bytes
+    mov     r15d, eax
+    mov     [converted_buf_size], r15
+    
+    mov     rax, 9
+    mov     rdi, 0
+    mov     rsi, r15
+    mov     rdx, 3
+    mov     r10, 0x22
+    mov     r8, -1
+    xor     r9, r9
     syscall
-    mov r14, rax
-    xor rdx, rdx ; clear the register of any thrash data it will hold the outer counter for chunk processing
-    xor r10, r10 ; clear the register of any thrash data (it will hold the X offset)
-    xor rbx, rbx ; clear the register of any thrash data it will hold the Y offset
+
+    mov     r14, rax
+    mov     r12, r14
+    xor     rdx, rdx
+    xor     r10, r10
+    xor     rbx, rbx
     ret
 
 
@@ -123,16 +141,8 @@ place_converted_chunk_in_memory:
     xor r9, r9
     mov r9b, [string_collection + r11]
     ; place it into memory (r14)
-    mov byte [r14], r9b
-
-    ; write the value to the console (this will not be here normally)
-    mov rax, 1            ; sys_write
-    mov rdi, 1            ; stdout
-    mov rsi, r14          ; adres bufora
-    mov rdx, 1            ; 1 bajt
-    syscall
-
-    inc r14 ; increment the address for next chunk
+    mov byte [r12], r9b
+    inc r12 ; increment the address for next chunk
 
     
 go_to_next_chunk:
@@ -143,27 +153,29 @@ go_to_next_chunk:
     cmp r10d, dword[width_buf]
     jl process_chunk
 
-    mov rax, 1          ; sys_write
-    mov rdi, 1          ; stdout
-    mov rsi, newline
-    mov rdx, 1
-    syscall
-
     xor r10, r10 ; reset x offset
     mov r10d, dword [width_buf]
     imul r10, 8
-    add rbx, r10         
+    add rbx, r10           
 
-    mov r8d, dword [width_buf]
-    mov ecx, dword [height_buf]
-    imul r8, rcx         
-
-    cmp rbx, r8
-    jge clear_memory_from_image_data
+    cmp rbx, [image_size]
+    jge write_to_console
 
     xor r10, r10          ; reset x offset
+    mov byte[r12], 10     ; add newline after each row of chunks
+    inc r12 ; increment the address for next chunk
     jmp process_chunk
-    
+
+
+write_to_console:
+    ; mov     rax, 1        ; sys_write
+    ; mov     rdi, 1        ; stdout
+    ; mov     rsi, r14      ; buffer base
+    ; mov     byte[r12], 10 ; add newline after each row of chunks
+    ; mov     rdx, [converted_buf_size]
+    ; add     rdx, 1
+    ; syscall
+
 
 clear_memory_from_image_data:
     mov rax, 11 ; munmap
@@ -171,11 +183,6 @@ clear_memory_from_image_data:
     mov rsi, r15
     syscall
 
-    ;close
-    mov rax, 3
-    mov rdi, r12
-    syscall
-    
     ;exit
     mov rax, 60 
     xor rdi, rdi ; status = 0
@@ -196,3 +203,5 @@ section .bss
 read_buf resb 4096
 width_buf resb 4
 height_buf resb 4
+converted_buf_size dq 0
+image_size dq 0

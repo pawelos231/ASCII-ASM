@@ -154,8 +154,7 @@ after_memory_read:
 place_converted_chunk_in_memory:
     xor r9, r9
     mov r9b, [string_collection + r11]
-    ; place it into memory (r14)
-    mov byte [r12], r9b
+    mov byte [r12], r9b 
     inc r12 ; increment the address for next chunk
 
     
@@ -163,9 +162,9 @@ go_to_next_chunk:
     xor r9, r9 ; clear the the register from converted chunk 
     xor rax, rax ; clear rax as it holds byte from image data
     xor rdx, rdx ; clear the outer counter
-    movzx r11d, byte [chunk_width]
+    movzx r11d, byte [chunk_width] ; we need chunk width to move to the next chunk
     add r10d, r11d ; we add to move it to the right, so next chunk to the right, this will have to zeroed out if we go to the edge of the image
-    cmp r10d, dword[width_buf]
+    cmp r10d, dword[width_buf] ; compare x offset with width of image
     jl process_chunk
 
     xor r10, r10 ; reset x offset

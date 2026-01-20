@@ -83,7 +83,7 @@ register_memory_for_converted_chunks:
     lea     eax, [eax + r9d - 1] ; eax = height + chunk_height - 1
     bsf     ecx, r9d ; ecx = log2(chunk_height)
     shr     eax, cl ; eax = rows
-    mov     ecx, eax ; ecx = rows (tak jak miałeś)
+    mov     ecx, eax ; ecx = rows
 
     mov     eax, r8d               ; cols
     imul    eax, ecx               ; eax = cols*rows

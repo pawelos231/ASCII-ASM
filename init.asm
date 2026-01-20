@@ -217,7 +217,7 @@ string_collection db " .:-=+*#%@", 0
 name db 'out.bruh', 0
 value dq 4096, 0
 chunk_width db 8 
-chunk_height db 8 
+chunk_height db 8
 
 
 

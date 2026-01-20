@@ -61,6 +61,7 @@ place_image_in_memory:
     mov r13, rax ; base adress rememebr (after 8 bytes of header info)
     ret
 
+; we dont need the file anymore after loading it into memory
 close_file:
     mov rax, 3
     mov rdi, r12

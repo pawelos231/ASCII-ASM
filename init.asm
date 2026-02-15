@@ -113,34 +113,55 @@ register_memory_for_converted_chunks:
 
 process_chunk:
     xor rcx, rcx
-    mov r8d, dword[width_buf]
-    mov r15, rdx
-    imul r15, r8
-    lea rsi, [r13 + r15]
-    add rsi, r10
-    add rsi, rbx
+    mov r8d, dword[width_buf] ; width
+    mov r15, rdx ; save outer row counter in r15 for later use in effective height calculation
+    imul r15, r8 ; y offset within current chunk row
+    lea rsi, [r13 + r15] ; base address + y offset of current chunk row
+    add rsi, r10 ; x offset in current chunk row
+    add rsi, rbx ; y offset of current chunk
+
+    ; effective width for this chunk column = min(chunk_width, width - x_offset)
+    mov eax, r8d ; width
+    sub eax, r10d ; width - x_offset
+    movzx r15d, byte [chunk_width] ; chunk_width
+    cmp eax, r15d ; compare width - x_offset with chunk_width
+    cmova eax, r15d ; if width - x_offset > chunk_width, effective width = chunk_width, else effective width = width - x_offset
+    mov r8d, eax ; r8d = effective width
+
+    ; effective height for this chunk row = min(chunk_height, rows_remaining)
+    mov r15, rdx ; save outer row counter across div
+    mov rax, [image_size] ; total image size in bytes
+    sub rax, rbx ; bytes remaining in the image from the current y offset
+    xor edx, edx ; clear edx for div
+    mov ecx, dword [width_buf] ; width (bytes in a row)
+    div rcx ; rax = rows remaining from current chunk row start
+    movzx r11d, byte [chunk_height]
+    cmp eax, r11d ; compare rows remaining with chunk_height
+    cmova eax, r11d ; if rows remaining > chunk_height, effective height = chunk_height, else effective height = rows remaining
+    mov r11d, eax ; r11d = effective height
+    mov rdx, r15 ; restore outer row counter
+    xor rcx, rcx ; restore inner counter after using rcx as div divisor
     
 inner:
     mov al, [rsi + rcx] ; load byte from image data
     movzx rax, al
     add r9, rax ; we add the pixel value to r9 on every iteration
     inc rcx
-    cmp cl, [chunk_width] ; where cl is the lower 8 bits of rcx
-    jne inner ; do the loop again if rcx is not equal to chunk_width
+    cmp ecx, r8d ; compare inner counter with effective width
+    jne inner ; do the loop again if we did not reach effective width
     inc rdx
-    xor r15, r15
-    cmp dl, [chunk_height]
+    cmp edx, r11d
     jne process_chunk
 
 
 after_memory_read:
-    ; compute average = sum / (chunk_width * chunk_height)
-    movzx r8d,  byte [chunk_width] ; r8d = chunk_width
-    movzx r11d, byte [chunk_height] ; r11d = chunk_height
-    bsf ecx, r8d ; ecx = log2(chunk_width)
-    bsf edx, r11d ; edx = log2(chunk_height)
-    add ecx, edx ; ecx = log2(chunk_width*chunk_height)
-    shr r9, cl; r9 = avg (instead of div)
+    ; compute average = sum / (effective_width * effective_height)
+    mov eax, r8d
+    imul eax, r11d ; pixel count in the current (possibly clipped) chunk
+    mov ecx, eax
+    mov rax, r9
+    xor edx, edx
+    div rcx
     mov r9, rax
     xor r11, r11 ; make place for index calculation
     mov r11, r9
@@ -216,8 +237,8 @@ newline db 10
 string_collection db " .:-=+*#%@", 0
 name db 'out.bruh', 0
 value dq 4096, 0
-chunk_width db 8 
-chunk_height db 8
+chunk_width db 64 
+chunk_height db 64
 
 
 

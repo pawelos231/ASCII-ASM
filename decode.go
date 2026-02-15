@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	file, err := os.Open("image.png")
+	file, err := os.Open("wp1848524.jpg")
 	if err != nil {
 		panic(err)
 	}

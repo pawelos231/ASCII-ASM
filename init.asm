@@ -223,7 +223,7 @@ chunk_height db 8
 
 section .bss
 read_buf resb 4096
-width_buf resb 4
-height_buf resb 4
+width_buf resb 64
+height_buf resb 64
 converted_buf_size dq 0
 image_size dq 0

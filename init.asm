@@ -125,7 +125,7 @@ inner:
     movzx rax, al
     add r9, rax ; we add the pixel value to r9 on every iteration
     inc rcx
-    cmp cl, [chunk_width]
+    cmp cl, [chunk_width] ; where cl is the lower 8 bits of rcx
     jne inner ; do the loop again if rcx is not equal to chunk_width
     inc rdx
     xor r15, r15
@@ -223,7 +223,7 @@ chunk_height db 8
 
 section .bss
 read_buf resb 4096
-width_buf resb 64
-height_buf resb 64
+width_buf resb 4
+height_buf resb 4
 converted_buf_size dq 0
 image_size dq 0
